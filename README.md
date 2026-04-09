@@ -8,7 +8,7 @@ Acepta:
 - SKUs sueltos, que se convierten automáticamente a la forma:
   `https://www.garmin.com/es-MX/p/0000000/pn/<SKU>/`
 
-La salida principal es un ZIP descargable con carpetas por SKU:
+La salida principal es un ZIP descargable con carpetas por SKUs:
 
 - `010-02969-02/01-cf-xl.jpg`
 - `010-02969-02/02-rf-xl.jpg`
