@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Garmin Image Extractor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero__copy">
+          <p class="eyebrow">Garmin Gallery Extractor</p>
+          <h1>Descargá el carrusel principal como un ZIP ordenado por SKU.</h1>
+          <p class="lead">
+            Funciona con URLs completas o con SKUs sueltos. Si ingresás solo el
+            SKU, la app arma automáticamente la URL usando el formato de Garmin.
+          </p>
+        </div>
+
+        <div class="hero__notes">
+          <article class="mini-card">
+            <p class="mini-card__title">Entrada flexible</p>
+            <p>Podés mezclar URLs y SKUs en el mismo envío.</p>
+          </article>
+          <article class="mini-card">
+            <p class="mini-card__title">Salida cloud-friendly</p>
+            <p>El usuario descarga un ZIP local con carpetas por SKU.</p>
+          </article>
+          <article class="mini-card">
+            <p class="mini-card__title">Compatible con Cloud Run</p>
+            <p>No depende de carpetas persistentes dentro del servidor.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <form id="download-form" class="form-card">
+          <div class="form-card__header">
+            <div>
+              <p class="section-kicker">Nueva extracción</p>
+              <h2>Preparar descarga</h2>
+            </div>
+            <div class="formula">
+              <span>SKU</span>
+              <code>https://www.garmin.com/es-MX/p/0000000/pn/&lt;SKU&gt;/</code>
+            </div>
+          </div>
+
+          <div class="fields">
+            <label class="field">
+              <span class="field__label">URLs de Garmin</span>
+              <textarea
+                id="urls"
+                name="urls"
+                rows="7"
+                placeholder="https://www.garmin.com.mx/...
+https://www.garmin.com/es-MX/p/904277/pn/010-D2101-00/"
+              ></textarea>
+              <span class="field__hint">
+                Pegá una o varias URLs, separadas por línea, espacio o coma.
+              </span>
+            </label>
+
+            <label class="field">
+              <span class="field__label">SKUs</span>
+              <textarea
+                id="skus"
+                name="skus"
+                rows="7"
+                placeholder="010-02969-02
+010-D2101-00"
+              ></textarea>
+              <span class="field__hint">
+                Si solo ingresás SKUs, la URL se arma automáticamente.
+              </span>
+            </label>
+          </div>
+
+          <div class="actions">
+            <button id="submit-button" type="submit">Generar ZIP y descargar</button>
+            <p class="actions__hint">
+              El ZIP mantiene esta estructura:
+              <code>SKU/imagen-01.jpg</code>
+            </p>
+          </div>
+        </form>
+
+        <aside class="side-panel">
+          <p class="section-kicker">Cómo se comporta en producción</p>
+          <h2>Qué pasa en Cloud Run</h2>
+          <ul class="facts">
+            <li>La app genera el ZIP y el navegador del usuario lo descarga.</li>
+            <li>No conviene guardar carpetas permanentes dentro de Cloud Run.</li>
+            <li>Si más adelante querés historial, lo correcto es sumar Cloud Storage.</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section id="status" class="status" aria-live="polite"></section>
+      <section id="results" class="results"></section>
+    </main>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
