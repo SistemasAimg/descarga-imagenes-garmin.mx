@@ -119,7 +119,7 @@ test("parseGarminBootstrap y extractCarouselAssets resuelven el SKU seleccionado
   assert.equal(result.sku, "010-02969-02");
   assert.equal(result.productName, "Edge de prueba");
   assert.equal(result.assets.length, 2);
-  assert.equal(result.assets[0].fileName, "01-cf-xl.jpg");
+  assert.equal(result.assets[0].fileName, "010-02969-02_1.jpg");
   assert.equal(
     result.assets[0].url,
     "https://res.cloudinary.com/it-production/image/upload/v1/Product_Images/es_MX/products/010-02969-02/v/cf-xl.jpg",

@@ -228,12 +228,10 @@ function buildCloudinaryAssetUrl(publicId, format, cloudName) {
   return `https://res.cloudinary.com/${cloudName}/image/upload/v1/${publicId}.${format}`;
 }
 
-function buildFileName(index, publicId, format) {
-  const baseName = publicId.split("/").pop() || `image-${index + 1}`;
-  const safeBaseName = sanitizePathSegment(baseName) || `image-${index + 1}`;
+function buildFileName(sku, index, format) {
+  const safeSku = sanitizePathSegment(sku) || "garmin";
   const extension = sanitizePathSegment(format || "jpg") || "jpg";
-  const prefix = String(index + 1).padStart(2, "0");
-  return `${prefix}-${safeBaseName}.${extension}`;
+  return `${safeSku}_${index + 1}.${extension}`;
 }
 
 function extractCarouselAssets(bootstrap, pageUrl) {
@@ -267,7 +265,7 @@ function extractCarouselAssets(bootstrap, pageUrl) {
       publicId: item.publicId,
       format: item.format || "jpg",
       url: buildCloudinaryAssetUrl(item.publicId, item.format || "jpg", cloudName),
-      fileName: buildFileName(index, item.publicId, item.format || "jpg"),
+      fileName: buildFileName(sku, index, item.format || "jpg"),
     }))
     .sort((left, right) => left.position - right.position);
 
