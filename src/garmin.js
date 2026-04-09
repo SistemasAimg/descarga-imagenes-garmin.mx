@@ -38,6 +38,15 @@ function buildGarminProductUrlFromSku(sku) {
   return SKU_URL_TEMPLATE.replace("{SKU}", encodeURIComponent(normalizeSku(sku)));
 }
 
+function buildBatchFolderName() {
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+
+  return `garmin-lote-${timestamp}`;
+}
+
 function sanitizePathSegment(value) {
   return String(value)
     .normalize("NFKD")
@@ -303,7 +312,7 @@ async function downloadSingleProduct(target, options) {
   const { finalUrl, html } = await fetchHtml(parsedUrl.toString());
   const bootstrap = parseGarminBootstrap(html);
   const product = extractCarouselAssets(bootstrap, finalUrl);
-  const outputDir = path.join(options.downloadsDir, product.sku);
+  const outputDir = options.batchDir;
 
   await fs.mkdir(outputDir, { recursive: true });
 
@@ -319,6 +328,12 @@ async function downloadSingleProduct(target, options) {
         fileName: asset.fileName,
         assetUrl: asset.url,
         absolutePath: outputPath,
+        relativePath: path.relative(options.downloadsDir, outputPath),
+        previewPath: `/downloads/${path
+          .relative(options.downloadsDir, outputPath)
+          .split(path.sep)
+          .map(encodeURIComponent)
+          .join("/")}`,
       });
     } catch (error) {
       failedFiles.push({
@@ -353,12 +368,17 @@ async function downloadSingleProduct(target, options) {
 }
 
 async function downloadFromGarminTargets(targets, options) {
+  const batchFolderName = buildBatchFolderName();
+  const batchDir = path.join(options.downloadsDir, batchFolderName);
   const successes = [];
   const failures = [];
 
   for (const target of targets) {
     try {
-      const result = await downloadSingleProduct(target, options);
+      const result = await downloadSingleProduct(target, {
+        ...options,
+        batchDir,
+      });
       successes.push(result);
     } catch (error) {
       failures.push({
@@ -372,6 +392,8 @@ async function downloadFromGarminTargets(targets, options) {
   }
 
   return {
+    batchFolderName,
+    batchDir,
     requestedCount: targets.length,
     successCount: successes.length,
     failureCount: failures.length,
@@ -387,6 +409,8 @@ async function downloadFromGarminInputs(inputs, options) {
 
 function buildClientReport(summary) {
   return {
+    batchFolderName: summary.batchFolderName,
+    batchDir: summary.batchDir,
     requestedCount: summary.requestedCount,
     successCount: summary.successCount,
     failureCount: summary.failureCount,
@@ -400,28 +424,18 @@ function buildClientReport(summary) {
       productName: result.productName,
       savedCount: result.savedFiles.length,
       failedCount: result.failedFiles.length,
+      savedFiles: result.savedFiles.map((file) => ({
+        fileName: file.fileName,
+        previewPath: file.previewPath,
+      })),
     })),
     failures: summary.failures,
   };
 }
 
-function buildArchiveFileName(report) {
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\.\d{3}Z$/, "Z");
-
-  if (report.successes.length === 1) {
-    const sku = sanitizePathSegment(report.successes[0].sku) || "garmin";
-    return `garmin-${sku}-${timestamp}.zip`;
-  }
-
-  return `garmin-lote-${timestamp}.zip`;
-}
-
 module.exports = {
   DOWNLOADS_DIR_NAME,
-  buildArchiveFileName,
+  buildBatchFolderName,
   buildClientReport,
   buildCloudinaryAssetUrl,
   buildGarminProductUrlFromSku,

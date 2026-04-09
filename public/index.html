@@ -17,10 +17,11 @@
       <section class="hero">
         <div class="hero__copy">
           <p class="eyebrow">Garmin Gallery Extractor</p>
-          <h1>Descargá el carrusel principal como un ZIP ordenado por SKU.</h1>
+          <h1>Generá una sola carpeta con todas las imágenes del lote.</h1>
           <p class="lead">
             Funciona con URLs completas o con SKUs sueltos. Si ingresás solo el
-            SKU, la app arma automáticamente la URL usando el formato de Garmin.
+            SKU, la app arma automáticamente la URL usando el formato de Garmin y
+            guarda todo junto en una carpeta única.
           </p>
         </div>
 
@@ -31,7 +32,7 @@
           </article>
           <article class="mini-card">
             <p class="mini-card__title">Salida cloud-friendly</p>
-            <p>El usuario descarga un ZIP local con carpetas por SKU.</p>
+            <p>En local se arma una sola carpeta con todas las imágenes juntas.</p>
           </article>
           <article class="mini-card">
             <p class="mini-card__title">Compatible con Cloud Run</p>
@@ -84,10 +85,10 @@ https://www.garmin.com/es-MX/p/904277/pn/010-D2101-00/"
           </div>
 
           <div class="actions">
-            <button id="submit-button" type="submit">Generar ZIP y descargar</button>
+            <button id="submit-button" type="submit">Generar carpeta del lote</button>
             <p class="actions__hint">
-              El ZIP mantiene esta estructura:
-              <code>SKU/imagen-01.jpg</code>
+              Formato de archivo:
+              <code>SKU_1.jpg</code>
             </p>
           </div>
         </form>
@@ -96,9 +97,9 @@ https://www.garmin.com/es-MX/p/904277/pn/010-D2101-00/"
           <p class="section-kicker">Cómo se comporta en producción</p>
           <h2>Qué pasa en Cloud Run</h2>
           <ul class="facts">
-            <li>La app genera el ZIP y el navegador del usuario lo descarga.</li>
-            <li>No conviene guardar carpetas permanentes dentro de Cloud Run.</li>
-            <li>Si más adelante querés historial, lo correcto es sumar Cloud Storage.</li>
+            <li>En local, los archivos quedan en una sola carpeta dentro de <code>downloads/</code>.</li>
+            <li>En Cloud Run el filesystem sigue siendo temporal.</li>
+            <li>Si querés persistencia en la nube, lo correcto sigue siendo usar Cloud Storage.</li>
           </ul>
         </aside>
       </section>
