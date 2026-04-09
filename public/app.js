@@ -19,37 +19,29 @@ function setStatus(message, type = "info") {
   statusBox.textContent = message;
 }
 
-function decodeReportHeader(headerValue) {
-  if (!headerValue) {
-    return null;
+function renderFileLinks(savedFiles) {
+  if (!Array.isArray(savedFiles) || savedFiles.length === 0) {
+    return "";
   }
 
-  try {
-    const normalized = headerValue.replaceAll("-", "+").replaceAll("_", "/");
-    const padded = normalized.padEnd(
-      normalized.length + ((4 - (normalized.length % 4)) % 4),
-      "=",
-    );
-    return JSON.parse(atob(padded));
-  } catch (_error) {
-    return null;
-  }
-}
+  const items = savedFiles
+    .map(
+      (file) => `
+        <li>
+          <a href="${escapeHtml(file.previewPath)}" target="_blank" rel="noreferrer">
+            ${escapeHtml(file.fileName)}
+          </a>
+        </li>
+      `,
+    )
+    .join("");
 
-function getFileNameFromDisposition(headerValue) {
-  const match = headerValue?.match(/filename="([^"]+)"/i);
-  return match ? match[1] : "garmin-images.zip";
-}
-
-function triggerDownload(blob, fileName) {
-  const downloadUrl = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = downloadUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1500);
+  return `
+    <div class="result-card__files">
+      <p class="result-card__label">Archivos generados</p>
+      <ul class="result-card__file-list">${items}</ul>
+    </div>
+  `;
 }
 
 function renderResults(report) {
@@ -57,6 +49,22 @@ function renderResults(report) {
     resultsBox.innerHTML = "";
     return;
   }
+
+  const summaryCard = `
+    <article class="result-card result-card--summary">
+      <div class="result-card__header">
+        <div>
+          <p class="result-card__label">Carpeta del lote</p>
+          <h3>${escapeHtml(report.batchFolderName || "garmin-lote")}</h3>
+        </div>
+        <span class="chip">${report.successCount} entrada(s) OK</span>
+      </div>
+      <p class="result-card__meta">
+        Se procesaron ${report.requestedCount} entrada(s) en total y
+        ${report.failureCount} fallaron.
+      </p>
+    </article>
+  `;
 
   const successCards = report.successes
     .map(
@@ -70,14 +78,13 @@ function renderResults(report) {
             <span class="chip">${result.savedCount} imágenes</span>
           </div>
           <p class="result-card__title">${escapeHtml(result.productName || "Producto Garmin")}</p>
-          <p class="result-card__meta">
-            Entrada: <code>${escapeHtml(result.inputValue)}</code>
-          </p>
+          <p class="result-card__meta">Entrada: <code>${escapeHtml(result.inputValue)}</code></p>
           ${
             result.failedCount
               ? `<p class="result-card__warning">Se omitieron ${result.failedCount} imagen(es) bloqueadas o no disponibles.</p>`
               : `<p class="result-card__success">Carrusel descargado completo.</p>`
           }
+          ${renderFileLinks(result.savedFiles)}
         </article>
       `,
     )
@@ -95,7 +102,7 @@ function renderResults(report) {
     )
     .join("");
 
-  resultsBox.innerHTML = `${successCards}${failureCards}`;
+  resultsBox.innerHTML = `${summaryCard}${successCards}${failureCards}`;
 }
 
 async function parseJsonSafely(response) {
@@ -119,10 +126,13 @@ form.addEventListener("submit", async (event) => {
 
   submitButton.disabled = true;
   resultsBox.innerHTML = "";
-  setStatus("Extrayendo imágenes, armando carpetas por SKU y preparando el ZIP...", "loading");
+  setStatus(
+    "Extrayendo imágenes y armando una sola carpeta con todo el lote...",
+    "loading",
+  );
 
   try {
-    const response = await fetch("/api/archive", {
+    const response = await fetch("/api/download", {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -130,35 +140,26 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({ urls, skus }),
     });
 
-    const contentType = response.headers.get("content-type") || "";
+    const payload = await parseJsonSafely(response);
 
-    if (!response.ok || contentType.includes("application/json")) {
-      const payload = await parseJsonSafely(response);
-
-      if (payload?.report) {
-        renderResults(payload.report);
+    if (!response.ok || !payload?.ok) {
+      if (payload) {
+        renderResults(payload);
       }
 
       throw new Error(payload?.message || "No se pudo completar la descarga.");
     }
 
-    const report = decodeReportHeader(response.headers.get("x-garmin-report"));
-    const fileName = getFileNameFromDisposition(
-      response.headers.get("content-disposition"),
-    );
-    const zipBlob = await response.blob();
+    renderResults(payload);
 
-    triggerDownload(zipBlob, fileName);
-    renderResults(report);
-
-    if (report?.failureCount) {
+    if (payload.failureCount) {
       setStatus(
-        `ZIP descargado. ${report.successCount} entrada(s) salieron bien y ${report.failureCount} fallaron.`,
+        `Carpeta generada: ${payload.batchFolderName}. ${payload.successCount} entrada(s) salieron bien y ${payload.failureCount} fallaron.`,
         "warning",
       );
     } else {
       setStatus(
-        `ZIP descargado correctamente con ${report?.successCount || 0} entrada(s) procesadas.`,
+        `Carpeta generada correctamente: ${payload.batchFolderName}.`,
         "success",
       );
     }

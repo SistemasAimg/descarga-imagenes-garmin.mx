@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
-  buildArchiveFileName,
+  buildBatchFolderName,
   buildClientReport,
   buildCloudinaryAssetUrl,
   buildGarminProductUrlFromSku,
@@ -128,6 +128,8 @@ test("parseGarminBootstrap y extractCarouselAssets resuelven el SKU seleccionado
 
 test("buildClientReport compacta el resumen para el frontend", () => {
   const report = buildClientReport({
+    batchFolderName: "garmin-lote-20260409T211500Z",
+    batchDir: "/tmp/garmin-downloads/garmin-lote-20260409T211500Z",
     requestedCount: 1,
     successCount: 1,
     failureCount: 0,
@@ -140,23 +142,25 @@ test("buildClientReport compacta el resumen para el frontend", () => {
         sku: "010-02969-02",
         productId: "123456",
         productName: "Edge de prueba",
-        savedFiles: [{ fileName: "01-cf-xl.jpg" }, { fileName: "02-rf-xl.jpg" }],
+        savedFiles: [
+          { fileName: "010-02969-02_1.jpg", previewPath: "/downloads/010-02969-02_1.jpg" },
+          { fileName: "010-02969-02_2.jpg", previewPath: "/downloads/010-02969-02_2.jpg" },
+        ],
         failedFiles: [{ fileName: "03-x.jpg" }],
       },
     ],
     failures: [],
   });
 
+  assert.equal(report.batchFolderName, "garmin-lote-20260409T211500Z");
   assert.equal(report.successes[0].savedCount, 2);
   assert.equal(report.successes[0].failedCount, 1);
+  assert.equal(report.successes[0].savedFiles[0].previewPath, "/downloads/010-02969-02_1.jpg");
 });
 
-test("buildArchiveFileName usa el SKU cuando hay una sola descarga", () => {
-  const fileName = buildArchiveFileName({
-    successes: [{ sku: "010-02969-02" }],
-  });
-
-  assert.match(fileName, /^garmin-010-02969-02-\d{8}T\d{6}Z\.zip$/);
+test("buildBatchFolderName genera un nombre de carpeta de lote", () => {
+  const folderName = buildBatchFolderName();
+  assert.match(folderName, /^garmin-lote-\d{8}T\d{6}Z$/);
 });
 
 test("normalizeSku convierte a mayúsculas", () => {
