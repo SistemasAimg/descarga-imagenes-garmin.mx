@@ -28,7 +28,7 @@ function renderFileLinks(savedFiles) {
     .map(
       (file) => `
         <li>
-          <a href="${escapeHtml(file.previewPath)}" target="_blank" rel="noreferrer">
+          <a href="${escapeHtml(file.downloadPath)}" target="_blank" rel="noreferrer">
             ${escapeHtml(file.fileName)}
           </a>
         </li>
@@ -105,6 +105,84 @@ function renderResults(report) {
   resultsBox.innerHTML = `${summaryCard}${successCards}${failureCards}`;
 }
 
+function flattenBatchFiles(report) {
+  return report.successes.flatMap((result) =>
+    result.savedFiles.map((file) => ({
+      sku: result.sku,
+      fileName: file.fileName,
+      downloadPath: file.downloadPath,
+    })),
+  );
+}
+
+async function pickLocalFolder() {
+  if (!("showDirectoryPicker" in window)) {
+    throw new Error(
+      "Tu navegador no permite guardar una carpeta local automáticamente. Usá Chrome o Edge en desktop.",
+    );
+  }
+
+  try {
+    return await window.showDirectoryPicker({ mode: "readwrite" });
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Necesitás elegir una carpeta local para guardar el lote.");
+    }
+
+    throw error;
+  }
+}
+
+async function saveBlobToFile(directoryHandle, fileName, blob) {
+  const fileHandle = await directoryHandle.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+}
+
+async function saveBatchToLocalFolder(report, rootDirectoryHandle) {
+  const batchDirectoryHandle = await rootDirectoryHandle.getDirectoryHandle(
+    report.batchFolderName,
+    { create: true },
+  );
+  const files = flattenBatchFiles(report);
+  const failures = [];
+  let savedCount = 0;
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    setStatus(
+      `Guardando ${index + 1}/${files.length}: ${file.fileName}`,
+      "loading",
+    );
+
+    try {
+      const response = await fetch(file.downloadPath);
+
+      if (!response.ok) {
+        throw new Error(`No se pudo bajar ${file.fileName} (${response.status}).`);
+      }
+
+      const blob = await response.blob();
+      await saveBlobToFile(batchDirectoryHandle, file.fileName, blob);
+      savedCount += 1;
+    } catch (error) {
+      failures.push({
+        fileName: file.fileName,
+        message:
+          error instanceof Error ? error.message : "No se pudo guardar el archivo.",
+      });
+    }
+  }
+
+  return {
+    batchFolderName: report.batchFolderName,
+    savedCount,
+    failedCount: failures.length,
+    failures,
+  };
+}
+
 async function parseJsonSafely(response) {
   try {
     return await response.json();
@@ -124,14 +202,16 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  let rootDirectoryHandle;
+
   submitButton.disabled = true;
   resultsBox.innerHTML = "";
-  setStatus(
-    "Extrayendo imágenes y armando una sola carpeta con todo el lote...",
-    "loading",
-  );
 
   try {
+    setStatus("Elegí en tu computadora la carpeta donde querés guardar el lote...", "loading");
+    rootDirectoryHandle = await pickLocalFolder();
+
+    setStatus("Buscando imágenes del carrusel y preparando el lote...", "loading");
     const response = await fetch("/api/download", {
       method: "POST",
       headers: {
@@ -150,16 +230,17 @@ form.addEventListener("submit", async (event) => {
       throw new Error(payload?.message || "No se pudo completar la descarga.");
     }
 
+    const saveSummary = await saveBatchToLocalFolder(payload, rootDirectoryHandle);
     renderResults(payload);
 
-    if (payload.failureCount) {
+    if (saveSummary.failedCount || payload.failureCount) {
       setStatus(
-        `Carpeta generada: ${payload.batchFolderName}. ${payload.successCount} entrada(s) salieron bien y ${payload.failureCount} fallaron.`,
+        `Carpeta creada en tu equipo: ${payload.batchFolderName}. Se guardaron ${saveSummary.savedCount} archivo(s) y ${saveSummary.failedCount} fallaron.`,
         "warning",
       );
     } else {
       setStatus(
-        `Carpeta generada correctamente: ${payload.batchFolderName}.`,
+        `Carpeta creada en tu equipo: ${payload.batchFolderName}. Se guardaron ${saveSummary.savedCount} archivo(s).`,
         "success",
       );
     }

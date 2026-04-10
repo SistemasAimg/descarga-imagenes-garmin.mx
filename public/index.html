@@ -32,11 +32,11 @@
           </article>
           <article class="mini-card">
             <p class="mini-card__title">Salida cloud-friendly</p>
-            <p>En local se arma una sola carpeta con todas las imágenes juntas.</p>
+            <p>Elegís una carpeta de tu computadora y ahí se guarda el lote completo.</p>
           </article>
           <article class="mini-card">
             <p class="mini-card__title">Compatible con Cloud Run</p>
-            <p>No depende de carpetas persistentes dentro del servidor.</p>
+            <p>No depende de carpetas persistentes dentro del servidor ni del disco de Cloud Run.</p>
           </article>
         </div>
       </section>
@@ -97,9 +97,9 @@ https://www.garmin.com/es-MX/p/904277/pn/010-D2101-00/"
           <p class="section-kicker">Cómo se comporta en producción</p>
           <h2>Qué pasa en Cloud Run</h2>
           <ul class="facts">
-            <li>En local, los archivos quedan en una sola carpeta dentro de <code>downloads/</code>.</li>
-            <li>En Cloud Run el filesystem sigue siendo temporal.</li>
-            <li>Si querés persistencia en la nube, lo correcto sigue siendo usar Cloud Storage.</li>
+            <li>Al enviar el lote, Chrome te pide elegir una carpeta local de destino.</li>
+            <li>La app crea dentro de esa carpeta un subdirectorio con nombre tipo <code>garmin-lote-...</code>.</li>
+            <li>En Cloud Run no dependemos del filesystem temporal del contenedor.</li>
           </ul>
         </aside>
       </section>

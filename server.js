@@ -1,26 +1,20 @@
 const express = require("express");
-const fs = require("node:fs/promises");
-const os = require("node:os");
 const path = require("node:path");
 
 const {
-  DOWNLOADS_DIR_NAME,
+  ASSET_HEADERS,
   buildClientReport,
   downloadFromGarminInputs,
+  ensureAllowedAssetUrl,
+  sanitizePathSegment,
 } = require("./src/garmin");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ROOT_DIR = __dirname;
-const DOWNLOADS_DIR =
-  process.env.DOWNLOADS_DIR ||
-  (process.env.K_SERVICE
-    ? path.join(os.tmpdir(), "garmin-downloads")
-    : path.join(ROOT_DIR, DOWNLOADS_DIR_NAME));
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(ROOT_DIR, "public")));
-app.use("/downloads", express.static(DOWNLOADS_DIR));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -35,9 +29,7 @@ async function buildSummaryFromRequest(req) {
       urls: rawUrls,
       skus: rawSkus,
     },
-    {
-      downloadsDir: DOWNLOADS_DIR,
-    },
+    {},
   );
 
   return {
@@ -72,16 +64,57 @@ app.post("/api/download", async (req, res) => {
   }
 });
 
-async function ensureDownloadsDir() {
-  await fs.mkdir(DOWNLOADS_DIR, { recursive: true });
-}
+app.get("/api/file", async (req, res) => {
+  try {
+    const rawUrl = typeof req.query.url === "string" ? req.query.url : "";
+    const rawFileName =
+      typeof req.query.filename === "string" ? req.query.filename : "garmin.jpg";
+
+    if (!rawUrl) {
+      return res.status(400).json({
+        ok: false,
+        message: "Falta la URL de la imagen.",
+      });
+    }
+
+    const sourceUrl = ensureAllowedAssetUrl(rawUrl).toString();
+    const safeFileName = sanitizePathSegment(rawFileName) || "garmin.jpg";
+    const upstream = await fetch(sourceUrl, {
+      headers: ASSET_HEADERS,
+      redirect: "follow",
+    });
+
+    if (!upstream.ok) {
+      return res.status(502).json({
+        ok: false,
+        message: `No se pudo descargar la imagen (${upstream.status}).`,
+      });
+    }
+
+    const arrayBuffer = await upstream.arrayBuffer();
+    res.setHeader(
+      "content-type",
+      upstream.headers.get("content-type") || "application/octet-stream",
+    );
+    res.setHeader(
+      "content-disposition",
+      `attachment; filename="${safeFileName}"`,
+    );
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    return res.status(400).json({
+      ok: false,
+      message:
+        error instanceof Error
+          ? error.message
+          : "No se pudo obtener la imagen solicitada.",
+    });
+  }
+});
 
 async function start() {
-  await ensureDownloadsDir();
-
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Garmin downloader disponible en http://localhost:${PORT}`);
-    console.log(`Directorio de trabajo: ${DOWNLOADS_DIR}`);
   });
 }
 

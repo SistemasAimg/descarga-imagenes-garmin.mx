@@ -2,10 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const {
+  ASSET_HEADERS,
   buildBatchFolderName,
   buildClientReport,
   buildCloudinaryAssetUrl,
   buildGarminProductUrlFromSku,
+  buildProxyDownloadPath,
+  ensureAllowedAssetUrl,
   extractCarouselAssets,
   extractJsonObjectAfterMarker,
   getSkuFromUrl,
@@ -129,7 +132,6 @@ test("parseGarminBootstrap y extractCarouselAssets resuelven el SKU seleccionado
 test("buildClientReport compacta el resumen para el frontend", () => {
   const report = buildClientReport({
     batchFolderName: "garmin-lote-20260409T211500Z",
-    batchDir: "/tmp/garmin-downloads/garmin-lote-20260409T211500Z",
     requestedCount: 1,
     successCount: 1,
     failureCount: 0,
@@ -143,10 +145,18 @@ test("buildClientReport compacta el resumen para el frontend", () => {
         productId: "123456",
         productName: "Edge de prueba",
         savedFiles: [
-          { fileName: "010-02969-02_1.jpg", previewPath: "/downloads/010-02969-02_1.jpg" },
-          { fileName: "010-02969-02_2.jpg", previewPath: "/downloads/010-02969-02_2.jpg" },
+          {
+            fileName: "010-02969-02_1.jpg",
+            assetUrl: "https://res.cloudinary.com/demo/image/upload/v1/a.jpg",
+            downloadPath: "/api/file?url=https%3A%2F%2Fres.cloudinary.com%2Fdemo%2Fimage%2Fupload%2Fv1%2Fa.jpg&filename=010-02969-02_1.jpg",
+          },
+          {
+            fileName: "010-02969-02_2.jpg",
+            assetUrl: "https://res.cloudinary.com/demo/image/upload/v1/b.jpg",
+            downloadPath: "/api/file?url=https%3A%2F%2Fres.cloudinary.com%2Fdemo%2Fimage%2Fupload%2Fv1%2Fb.jpg&filename=010-02969-02_2.jpg",
+          },
         ],
-        failedFiles: [{ fileName: "03-x.jpg" }],
+        failedFiles: [],
       },
     ],
     failures: [],
@@ -154,8 +164,36 @@ test("buildClientReport compacta el resumen para el frontend", () => {
 
   assert.equal(report.batchFolderName, "garmin-lote-20260409T211500Z");
   assert.equal(report.successes[0].savedCount, 2);
-  assert.equal(report.successes[0].failedCount, 1);
-  assert.equal(report.successes[0].savedFiles[0].previewPath, "/downloads/010-02969-02_1.jpg");
+  assert.equal(report.successes[0].failedCount, 0);
+  assert.equal(
+    report.successes[0].savedFiles[0].downloadPath,
+    "/api/file?url=https%3A%2F%2Fres.cloudinary.com%2Fdemo%2Fimage%2Fupload%2Fv1%2Fa.jpg&filename=010-02969-02_1.jpg",
+  );
+});
+
+test("buildProxyDownloadPath arma la URL interna de descarga", () => {
+  assert.equal(
+    buildProxyDownloadPath(
+      "https://res.cloudinary.com/demo/image/upload/v1/a.jpg",
+      "010-02969-02_1.jpg",
+    ),
+    "/api/file?url=https%3A%2F%2Fres.cloudinary.com%2Fdemo%2Fimage%2Fupload%2Fv1%2Fa.jpg&filename=010-02969-02_1.jpg",
+  );
+});
+
+test("ensureAllowedAssetUrl acepta hosts de imagen válidos", () => {
+  assert.equal(
+    ensureAllowedAssetUrl("https://res.cloudinary.com/demo/image/upload/v1/a.jpg").hostname,
+    "res.cloudinary.com",
+  );
+  assert.equal(
+    ensureAllowedAssetUrl("https://res.garmin.com/transform/image/upload/demo.jpg").hostname,
+    "res.garmin.com",
+  );
+});
+
+test("ASSET_HEADERS expone el referer esperado", () => {
+  assert.equal(ASSET_HEADERS.referer, "https://www.garmin.com/");
 });
 
 test("buildBatchFolderName genera un nombre de carpeta de lote", () => {

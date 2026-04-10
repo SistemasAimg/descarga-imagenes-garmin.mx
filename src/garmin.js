@@ -1,6 +1,3 @@
-const fs = require("node:fs/promises");
-const path = require("node:path");
-
 const DOWNLOADS_DIR_NAME = "downloads";
 const GARMIN_BOOTSTRAP_MARKER = "var GarminAppBootstrap = ";
 const SKU_URL_TEMPLATE = "https://www.garmin.com/es-MX/p/0000000/pn/{SKU}/";
@@ -9,6 +6,11 @@ const DEFAULT_HEADERS = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
   accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
   "accept-language": "es-MX,es;q=0.9,en;q=0.8",
+};
+const ASSET_HEADERS = {
+  "user-agent": DEFAULT_HEADERS["user-agent"],
+  accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+  referer: "https://www.garmin.com/",
 };
 
 function splitInputList(rawInput) {
@@ -76,6 +78,25 @@ function ensureAllowedGarminUrl(urlString) {
 
   if (!allowedHosts.includes(host)) {
     throw new Error(`La URL "${urlString}" no pertenece a Garmin.`);
+  }
+
+  return parsedUrl;
+}
+
+function ensureAllowedAssetUrl(urlString) {
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(urlString);
+  } catch (_error) {
+    throw new Error(`La URL de imagen "${urlString}" no es válida.`);
+  }
+
+  const host = parsedUrl.hostname.toLowerCase();
+  const allowedHosts = ["res.cloudinary.com", "res.garmin.com"];
+
+  if (!allowedHosts.includes(host)) {
+    throw new Error(`La imagen "${urlString}" no pertenece a un origen permitido.`);
   }
 
   return parsedUrl;
@@ -243,6 +264,10 @@ function buildFileName(sku, index, format) {
   return `${safeSku}_${index + 1}.${extension}`;
 }
 
+function buildProxyDownloadPath(assetUrl, fileName) {
+  return `/api/file?url=${encodeURIComponent(assetUrl)}&filename=${encodeURIComponent(fileName)}`;
+}
+
 function extractCarouselAssets(bootstrap, pageUrl) {
   const { sku, product } = resolveSelectedProduct(bootstrap, pageUrl);
   const gallery = product?.images?.mediaGallery;
@@ -290,68 +315,16 @@ function extractCarouselAssets(bootstrap, pageUrl) {
   };
 }
 
-async function downloadFile(url, outputPath) {
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": DEFAULT_HEADERS["user-agent"],
-      accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-      referer: "https://www.garmin.com/",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`No pude descargar ${url} (${response.status}).`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  await fs.writeFile(outputPath, Buffer.from(arrayBuffer));
-}
-
 async function downloadSingleProduct(target, options) {
   const parsedUrl = ensureAllowedGarminUrl(target.url);
   const { finalUrl, html } = await fetchHtml(parsedUrl.toString());
   const bootstrap = parseGarminBootstrap(html);
   const product = extractCarouselAssets(bootstrap, finalUrl);
-  const outputDir = options.batchDir;
-
-  await fs.mkdir(outputDir, { recursive: true });
-
-  const savedFiles = [];
-  const failedFiles = [];
-
-  for (const asset of product.assets) {
-    try {
-      const outputPath = path.join(outputDir, asset.fileName);
-      await downloadFile(asset.url, outputPath);
-
-      savedFiles.push({
-        fileName: asset.fileName,
-        assetUrl: asset.url,
-        absolutePath: outputPath,
-        relativePath: path.relative(options.downloadsDir, outputPath),
-        previewPath: `/downloads/${path
-          .relative(options.downloadsDir, outputPath)
-          .split(path.sep)
-          .map(encodeURIComponent)
-          .join("/")}`,
-      });
-    } catch (error) {
-      failedFiles.push({
-        fileName: asset.fileName,
-        assetUrl: asset.url,
-        message:
-          error instanceof Error ? error.message : "No se pudo descargar la imagen.",
-      });
-    }
-  }
-
-  if (savedFiles.length === 0) {
-    const firstFailure = failedFiles[0];
-    throw new Error(
-      firstFailure?.message ||
-        `No se pudo descargar ninguna imagen para el SKU ${product.sku}.`,
-    );
-  }
+  const savedFiles = product.assets.map((asset) => ({
+    fileName: asset.fileName,
+    assetUrl: asset.url,
+    downloadPath: buildProxyDownloadPath(asset.url, asset.fileName),
+  }));
 
   return {
     inputType: target.inputType,
@@ -361,24 +334,19 @@ async function downloadSingleProduct(target, options) {
     sku: product.sku,
     productId: product.productId,
     productName: product.productName,
-    outputDir,
     savedFiles,
-    failedFiles,
+    failedFiles: [],
   };
 }
 
 async function downloadFromGarminTargets(targets, options) {
   const batchFolderName = buildBatchFolderName();
-  const batchDir = path.join(options.downloadsDir, batchFolderName);
   const successes = [];
   const failures = [];
 
   for (const target of targets) {
     try {
-      const result = await downloadSingleProduct(target, {
-        ...options,
-        batchDir,
-      });
+      const result = await downloadSingleProduct(target, options);
       successes.push(result);
     } catch (error) {
       failures.push({
@@ -393,7 +361,6 @@ async function downloadFromGarminTargets(targets, options) {
 
   return {
     batchFolderName,
-    batchDir,
     requestedCount: targets.length,
     successCount: successes.length,
     failureCount: failures.length,
@@ -410,7 +377,6 @@ async function downloadFromGarminInputs(inputs, options) {
 function buildClientReport(summary) {
   return {
     batchFolderName: summary.batchFolderName,
-    batchDir: summary.batchDir,
     requestedCount: summary.requestedCount,
     successCount: summary.successCount,
     failureCount: summary.failureCount,
@@ -426,7 +392,8 @@ function buildClientReport(summary) {
       failedCount: result.failedFiles.length,
       savedFiles: result.savedFiles.map((file) => ({
         fileName: file.fileName,
-        previewPath: file.previewPath,
+        assetUrl: file.assetUrl,
+        downloadPath: file.downloadPath,
       })),
     })),
     failures: summary.failures,
@@ -435,12 +402,15 @@ function buildClientReport(summary) {
 
 module.exports = {
   DOWNLOADS_DIR_NAME,
+  ASSET_HEADERS,
   buildBatchFolderName,
   buildClientReport,
   buildCloudinaryAssetUrl,
   buildGarminProductUrlFromSku,
+  buildProxyDownloadPath,
   downloadFromGarminInputs,
   downloadFromGarminTargets,
+  ensureAllowedAssetUrl,
   extractCarouselAssets,
   extractJsonObjectAfterMarker,
   getSkuFromUrl,
